@@ -1,17 +1,16 @@
-const mongoose=require("mongoose")
+const db = require("../config/mysql")
 
+async function connectDB() {
 
-async function connectDB(){
-
-    try{
-        await mongoose.connect(process.env.MONGO_URL)
-        console.log("connected to mongoDB")
-    }catch(err){
-        console.log("MongoDb do not connected")
+    try {
+        const [rows] = await db.query("SELECT 1");
+        console.log("MySQL connected");
+    } catch (err) {
+        console.error("DB connection failed ", err);
     }
 
 }
 
-module.exports=connectDB
+module.exports = connectDB
 
 

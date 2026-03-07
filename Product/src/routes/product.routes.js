@@ -9,16 +9,17 @@ const router = express.Router()
 const upload = multer({ storage: multer.memoryStorage() })
 
 
-router.post("/", createAuthMiddleware(["admin", "seller"]), upload.array("images", 5),
+router.get("/", getProducts)
+router.get("/:id", getProductbyId)
+
+router.post("/", createAuthMiddleware(["seller"]), upload.array("images", 5),
     createProductValidators, createProduct)
     
-router.get("/", getProducts)
 router.patch("/:id",createAuthMiddleware(["seller"]), updateProduct)
 router.delete("/:id",createAuthMiddleware(["seller"]), deleteProduct)
 
 router.get("/seller",createAuthMiddleware(["seller"]),productsBySeller)
 
-router.get("/:id", getProductbyId)
 
 
 module.exports = router
