@@ -1,33 +1,33 @@
-const { body, ValidationResult } = require("express-validator")
-const  mongoose = require("mongoose")
-
+const { body, validationResult } = require("express-validator")
+const mongoose = require("mongoose")
 
 function handleValidationError(req, res, next) {
 
-    const error = ValidationResult(req)
+    const error = validationResult(req)
+
     if (!error.isEmpty()) {
-        return res.status(400).json({ message: "Validation error" })
+        return res.status(400).json({
+            message: "Validation error",
+            errors: error.array()
+        })
     }
+
     next()
 }
-
 
 const validateAddItem = [
 
     body("productId")
         .isString()
         .withMessage("ProductId must be a String")
-        .custom(value=>mongoose.Types.ObjectId.isValid(value))
-        .withMessage("Invalid ProductID format"),
+        .notEmpty()
+        .withMessage("Product id is required"),
 
     body("quantity")
-    .isInt({gt:0})
-    .withMessage("Quanitity must be a positive integer"),
+        .isInt({ gt: 0 })
+        .withMessage("Quantity must be a positive integer"),
 
     handleValidationError
-
 ]
 
-
-
-module.exports= {validateAddItem}
+module.exports = { validateAddItem }

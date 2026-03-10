@@ -1,37 +1,98 @@
 const cartModel = require("../models/cart.model")
 
 
-async function addItem(req,res){
+async function addItem(req, res) {
 
-    const {productId,quantity}=req.body
+    try {
 
-    const user=req.user
+        const { productId, quantity } = req.body
 
-    const cart=await cartModel.findOne({user:user._id})
+        const user = req.user
 
-    if(!cart){
-        cart=new cartModel({user:user._id,items:[]})
+        let cart = await cartModel.findOne({ user: user.id })
+
+        if (!cart) {
+            cart = new cartModel({ user: user.id, items: [] })
+        }
+
+        const existingItemIndex = cart.items.findIndex(item => item.productId === productId) //index of current item 
+
+        if (existingItemIndex > 0) {
+            cart.items[existingItemIndex].quantity = quantity
+        } else {
+            cart.items.push({ productId, quantity })
+        }
+
+
+        await cart.save()
+
+
+        res.status(200).json({
+            message: "items added to cart",
+            cart
+        })
+
+
+    } catch (err) {
+        return res.status(500).json({
+            message: "Internal server error",
+            error: err.message
+        })
     }
+}
 
-    const existingItemIndex=cart.items.findIndex(item=>item.productId.toString()===productId) //index of current item 
+async function getItem(req, res) {
+    try {
+        const userId = req.user.id
 
-    if(existingItemIndex>=0){
-        cart.items[existingItemIndex].quantity += quantity
-    }else{
-        cart.items.push({productId,quantity})
+        const cart = await cartModel.findOne({
+            user: userId
+        });
+
+        if (!cart) {
+            return res.status(404).json({ message: "Cart not found" });
+        }
+
+        return res.status(200).json({
+            message: "Cart fetch successfull",
+            cart
+        })
+    } catch (err) {
+        return res.status(500).json({
+            message: "Internal server error",
+            error: err.message
+        })
     }
+}
 
+async function deleteCart(req, res) {
+    try {
+        const userId = req.user.id;
 
-    await cart.save()
+        const cart = await cartModel.findOne({
+            user: userId
+        });
 
+        if (!cart) {
+            return res.status(404).json({ message: "Cart not found" });
+        }
 
-    res.status(200).json({
-        message:"items added to cart",
-        cart
-    })
+        await cartModel.deleteOne({
+            user: userId
+        })
+
+        return res.status(200).json({
+            message: "Delete successfull"
+        })
+    } catch (err) {
+        return res.status(500).json({
+            message: "Internal server error",
+            error: err.message
+        })
+    }
 
 }
 
 
 
-module.exports={addItem}
+module.exports = { addItem, getItem, deleteCart }
