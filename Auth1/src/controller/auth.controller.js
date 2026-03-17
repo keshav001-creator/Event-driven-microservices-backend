@@ -145,8 +145,7 @@ async function getUserAddress(req, res) {
     const id = req.user.id
 
     const [rows] = await db.execute(
-        `SELECT pincode, street, city, state, country
-         FROM user_address WHERE user_id=?`,
+        `SELECT * FROM user_address WHERE user_id=?`,
         [id]
     )
 

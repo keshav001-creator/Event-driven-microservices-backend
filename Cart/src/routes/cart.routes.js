@@ -5,7 +5,7 @@ const{addItem,getItem,deleteCart}=require("../controllers/cart.controller")
 const router=express.Router()
 
 
-router.get("/",createAuthMiddleware(["user"]),getItem)
+router.get("/item",createAuthMiddleware(["user"]),getItem)
 router.post("/",createAuthMiddleware(["user"]),validateAddItem,addItem)
 router.delete("/delete",createAuthMiddleware(["user"]),deleteCart)
 

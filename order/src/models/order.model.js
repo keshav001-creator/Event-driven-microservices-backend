@@ -41,7 +41,7 @@ const orderSchema = new mongoose.Schema({
                     enum:["USD","INR"],
                   
                 }
-            }
+            }   
         }
     ],
 
