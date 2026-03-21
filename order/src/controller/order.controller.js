@@ -131,7 +131,8 @@ async function getMyOrderById(req, res) {
         // console.log(order)
 
         return res.status(200).json({
-            message: "Order fetched successfully"
+            message: "Order fetched successfully",
+            order:order
         })
 
     } catch (err) {
