@@ -3,6 +3,7 @@ const db = require("../config/mysql")
 const bcrypt = require("bcryptjs")
 const jwt = require("jsonwebtoken")
 const redis = require("../db/redis")
+const { publishToQueue } = require("../broker/broker")
 
 async function RegisterUser(req, res) {
 
@@ -40,6 +41,16 @@ async function RegisterUser(req, res) {
 
         }, process.env.JWT_SECRET_KEY, { expiresIn: "1d" })
 
+        await publishToQueue("auth_notification_queue",{
+            id: result.insertId,
+            username: UserName,
+            email: userEmail,
+            fullName:{
+                firstName:FirstName,
+                lastName:LastName
+            },
+            role: role || "user"
+        })
 
         res.cookie("token", token, {
             httpOnly: true,

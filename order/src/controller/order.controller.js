@@ -117,10 +117,14 @@ async function getMyOrderById(req, res) {
     const userId = req.user.id;
     const orderId = req.params.id;
 
+    console.log("Get Order by ID Route reached with orderId:", orderId, "and userId:", userId)
+
     try {
         const [order] = await db.execute(
             `SELECT * FROM orders WHERE user_id=? AND order_id=?`, [userId, orderId]
         )
+
+        console.log("Order fetched from DB:", order)
 
         if (order.length === 0) {
             return res.status(404).json({
