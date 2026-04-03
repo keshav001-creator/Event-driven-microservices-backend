@@ -1,12 +1,13 @@
 const productModel = require("../model/product.model")
 const db = require("../config/mysql")
 const { uploadImage } = require("../service/imagekit")
+const { publishToQueue } = require("../broker/broker")
 
 async function createProduct(req, res) {
 
     try {
 
-        const { title, description, priceAmount, priceCurrency } = req.body
+        const { title, description, priceAmount, priceCurrency,stock } = req.body
 
         const seller = req.user.id
 
@@ -23,12 +24,21 @@ async function createProduct(req, res) {
 
         const [result] = await db.execute(
             `INSERT INTO product_table 
-            (title, description, price_amount, price_currency, seller_id)
-            VALUES (?,?,?,?,?)`,
-            [title, description, Number(priceAmount), priceCurrency, seller]
+            (title, description, price_amount, price_currency, seller_id,stock)
+            VALUES (?,?,?,?,?,?)`,
+            [title, description, Number(priceAmount), priceCurrency, seller,stock]
         )
 
-        console.log("result:", result.insertId)
+        await publishToQueue("product_sellerDashboard_queue", {
+            product_id: result.insertId,
+            title,
+            description,    
+            price_amount: Number(priceAmount),
+            price_currency: priceCurrency,
+            seller_id: seller,
+            stock: stock  
+        })
+        // console.log("result:", result.insertId)
 
         // const product = await productModel.create({
         //     title,

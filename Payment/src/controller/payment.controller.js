@@ -45,9 +45,8 @@ async function createPayment(req, res) {
       )
 
       // console.log(payment);
-
       return res.status(200).json({
-         message: "Payment created successfully",
+         message: "Payment initiated successfully",
          payment: payment.insertId
       })
 
@@ -86,7 +85,7 @@ async function verifyPayment(req, res) {
       }
 
       const [result] = await db.execute(
-      `UPDATE payments 
+         `UPDATE payments 
       SET razorpay_payment_id=?, signature=?, status='COMPLETED'
       WHERE razor_order_id=? AND status='PENDING' `,
          [razorpayPaymentId, signature, razorOrderId]
@@ -98,14 +97,24 @@ async function verifyPayment(req, res) {
          });
       }
 
-      await publishToQueue("payment_completed_queue", {
-         orderId: payment[0].order_id,
-         paymentId: payment[0].id,
-         amount: payment[0].price_amount,
-         currency: payment[0].price_currency,
-         email: req.user.email
-      })
 
+      await Promise.all([
+         publishToQueue("payment_completed_queue", {
+            orderId: payment[0].order_id,
+            paymentId: payment[0].id,
+            amount: payment[0].price_amount,
+            currency: payment[0].price_currency,
+            email: req.user.email
+         }),
+         publishToQueue("payment_completed_sellerDashboard_queue", {
+            orderId: payment[0].order_id,     //order_id of the order given in params
+            paymentId: payment[0].id,
+            amount: payment[0].price_amount,
+            currency: payment[0].price_currency,
+            email: req.user.email,
+            username: req.user.username
+         })
+      ])
 
       return res.status(200).json({
          message: "Payment verified successfully"
@@ -115,14 +124,14 @@ async function verifyPayment(req, res) {
 
    } catch (err) {
 
-      await publishToQueue("payment_failed_queue", { 
+      await publishToQueue("payment_failed_queue", {
          orderId: payment[0]?.order_id,
          paymentId: payment[0]?.id,
          amount: payment[0]?.price_amount,
          currency: payment[0]?.price_currency,
          email: req.user.email,
          username: req.user.username
-      }) 
+      })
 
       return res.status(500).json({
          message: "Internal server error",

@@ -25,7 +25,7 @@ async function RegisterUser(req, res) {
         const hashedPassword = await bcrypt.hash(userPassword, 10)
 
         const [result] = await db.execute(
-            `INSERT INTO users
+        `INSERT INTO users
         (username, email,password, first_name, last_name)
         VALUES (?,?,?,?,?)`,
             [UserName, userEmail, hashedPassword, FirstName, LastName]
@@ -41,16 +41,26 @@ async function RegisterUser(req, res) {
 
         }, process.env.JWT_SECRET_KEY, { expiresIn: "1d" })
 
-        await publishToQueue("auth_notification_queue",{
+        await Promise.all([
+            publishToQueue("auth_notification_queue",{
             id: result.insertId,
             username: UserName,
             email: userEmail,
             fullName:{
                 firstName:FirstName,
                 lastName:LastName
-            },
-            role: role || "user"
+            }
+        }),
+        publishToQueue("auth_sellerDashboard_queue",{
+            user_id: result.insertId,                               
+            username: UserName,
+            email: userEmail,
+            fullName:{
+                firstName:FirstName,
+                lastName:LastName
+            }
         })
+        ])
 
         res.cookie("token", token, {
             httpOnly: true,

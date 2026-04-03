@@ -1,14 +1,11 @@
 const axios = require("axios")
 const db = require("../config/mysql")
+const { publishToQueue } = require("../broker/broker")
 
 async function createOrder(req, res) {
 
-    // console.log("Route reached")
-
     const userId = req.user.id;
-
     const token = req.cookies?.token || req.headers?.authorization?.split(' ')[1]
-
     let orderId = null;
 
     try {
@@ -30,8 +27,6 @@ async function createOrder(req, res) {
             return response.data.row[0]
         }))
 
-        // console.log("Product:", products);
-
         const addressResponse = await axios.get(
             `http://localhost:3000/auth/users/me/addresses`,
             {
@@ -41,13 +36,17 @@ async function createOrder(req, res) {
             }
         )
         // console.log("address:", addressResponse.data.addresses.address_id)
-        const addressId = addressResponse.data.addresses.address_id
 
+
+        const addressId = addressResponse.data.addresses.address_id
         let TotalPriceAmount = 0;
 
 
-        const orderItems = [];
+        const orderItems = [];  //array for multiple items in a cart at a time
 
+
+
+        // adding each items of cart into orderItems array
         for (let item of cartResponse.data.cart.items) {
             const Product = products.find(p => p.product_id === Number(item.productId))
 
@@ -68,10 +67,13 @@ async function createOrder(req, res) {
                 product_id: item.productId,
                 quantity: item.quantity,
                 price_amount: priceTotal,
-                price_currency: Product.price_currency
+                price_currency: Product.price_currency,
+                sellerId: Product.seller_id
             });
         }
 
+
+        // add order into the database and get the orderId for adding items into order_items table
         const [orderResult] = await db.execute(
             `INSERT INTO orders
             (user_id, total_price_amount, total_price_currency, shipping_address_id)
@@ -81,20 +83,32 @@ async function createOrder(req, res) {
 
         const orderId = orderResult.insertId;
 
+
         for (let item of orderItems) {
             await db.execute(
                 `INSERT INTO order_items
-                 (order_id, product_id, quantity, price_amount, price_currency)
-                 VALUES (?,?,?,?,?)`,
+                 (order_id, product_id, quantity, price_amount, price_currency, seller_id)
+                 VALUES (?,?,?,?,?,?)`,
                 [
                     orderId,
                     item.product_id,
                     item.quantity,
                     item.price_amount,
-                    item.price_currency
+                    item.price_currency,
+                    item.sellerId
                 ]
             )
         }
+
+        //publish order details to the queue for sellerDashboard service
+        await publishToQueue("order_sellerDashboard_queue", {
+            order_id: orderId,
+            user_id: userId,
+            total_amount: TotalPriceAmount,
+            currency: "INR",
+            address_id: addressId,
+            items: orderItems
+        })
 
         return res.status(201).json({
             message: "Order created successfully",
@@ -136,7 +150,7 @@ async function getMyOrderById(req, res) {
 
         return res.status(200).json({
             message: "Order fetched successfully",
-            order:order
+            order: order
         })
 
     } catch (err) {
@@ -170,7 +184,7 @@ async function getMyOrder(req, res) {
 
         return res.status(200).json({
             message: "Order fetched successfully",
-            Orders: Orders  
+            Orders: Orders
         });
 
     } catch (err) {
@@ -181,18 +195,18 @@ async function getMyOrder(req, res) {
     }
 }
 
-async function cancelMyOrderById(req,res){
-      const userId = req.user.id;
+async function cancelMyOrderById(req, res) {
+    const userId = req.user.id;
     const orderId = req.params.id;
 
     try {
 
-         const [orderStatus] = await db.execute(
+        const [orderStatus] = await db.execute(
             `SELECT status FROM orders WHERE user_id=? AND order_id=?`, [userId, orderId]
         )
 
-        if(!orderStatus.status=="PENDING"){
-            return res.status(200).json({message:"Order can not be cancelled"})
+        if (!orderStatus.status == "PENDING") {
+            return res.status(200).json({ message: "Order can not be cancelled" })
         }
 
 
@@ -247,4 +261,4 @@ async function cancelMyOrderById(req,res){
 //         })
 //     }
 // }
-module.exports = { createOrder, getMyOrder, getMyOrderById, cancelMyOrderById}
+module.exports = { createOrder, getMyOrder, getMyOrderById, cancelMyOrderById }
