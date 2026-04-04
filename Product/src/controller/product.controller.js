@@ -1,4 +1,3 @@
-const productModel = require("../model/product.model")
 const db = require("../config/mysql")
 const { uploadImage } = require("../service/imagekit")
 const { publishToQueue } = require("../broker/broker")
