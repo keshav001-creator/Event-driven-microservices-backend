@@ -1,18 +1,13 @@
-require("dotenv").config()
-const mongoose=require("mongoose")
+const db=require("../config/mySql")
 
 
-async function connectDB(){
-
-    try{
-        await mongoose.connect(process.env.MONGO_URL)
-        console.log("Connected to MONGO DB")
-
-    }catch(err){
-
-        console.log("Error while connecting to DB:",err)
-
-    }
+async function connectDB() {
+  try {
+    const [rows] = await db.query("SELECT 1");
+    console.log("MySQL connected");
+  } catch (err) {
+    console.error("DB connection failed ", err);
+  }
 }
 
 
