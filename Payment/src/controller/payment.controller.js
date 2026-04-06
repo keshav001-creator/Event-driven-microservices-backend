@@ -20,7 +20,7 @@ async function createPayment(req, res) {
       const orderResponse = await axios.get(`http://localhost:3003/api/${orderId}`, {
          headers: {
             Authorization: `Bearer ${token}`
-         }
+         }  
       })
 
       //    console.log(orderResponse.data.order[0].total_price_amount)
@@ -63,6 +63,7 @@ async function createPayment(req, res) {
 async function verifyPayment(req, res) {
    const { razorOrderId, razorpayPaymentId, signature } = req.body;
    const secret = process.env.RAZORPAY_KEY_SECRET;
+   let finalPayment;
 
    try {
       const { validatePaymentVerification } = require('../../node_modules/razorpay/dist/utils/razorpay-utils.js')
@@ -80,12 +81,14 @@ async function verifyPayment(req, res) {
          `SELECT * FROM payments WHERE razor_order_id=? AND status=?`, [razorOrderId, "PENDING"]
       )
 
+      finalPayment=payment;
+
       if (payment.length === 0) {
          return res.status(404).json({ message: "Payment not found" })
       }
 
       const [result] = await db.execute(
-         `UPDATE payments 
+      `UPDATE payments 
       SET razorpay_payment_id=?, signature=?, status='COMPLETED'
       WHERE razor_order_id=? AND status='PENDING' `,
          [razorpayPaymentId, signature, razorOrderId]
@@ -113,8 +116,21 @@ async function verifyPayment(req, res) {
             currency: payment[0].price_currency,
             email: req.user.email,
             username: req.user.username
+         }),
+         publishToQueue("order_payment_queue", {
+            orderId: payment[0].order_id,
+            status:"COMPLETED",
+            userId: payment[0].user_id
+         }),
+         publishToQueue("payment_cart_queue", {
+            userId: payment[0].user_id
          })
+
       ])
+
+
+
+
 
       return res.status(200).json({
          message: "Payment verified successfully"
@@ -125,10 +141,10 @@ async function verifyPayment(req, res) {
    } catch (err) {
 
       await publishToQueue("payment_failed_queue", {
-         orderId: payment[0]?.order_id,
-         paymentId: payment[0]?.id,
-         amount: payment[0]?.price_amount,
-         currency: payment[0]?.price_currency,
+         orderId: finalPayment?.order_id,
+         paymentId: finalPayment?.id,
+         amount: finalPayment?.price_amount,
+         currency: finalPayment?.price_currency,
          email: req.user.email,
          username: req.user.username
       })

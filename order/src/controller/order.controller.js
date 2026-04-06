@@ -1,6 +1,6 @@
 const axios = require("axios")
 const db = require("../config/mysql")
-const { publishToQueue } = require("../broker/broker")
+const { publishToQueue, subscribeToQueue } = require("../broker/broker")
 
 async function createOrder(req, res) {
 
@@ -261,4 +261,6 @@ async function cancelMyOrderById(req, res) {
 //         })
 //     }
 // }
+
+
 module.exports = { createOrder, getMyOrder, getMyOrderById, cancelMyOrderById }
