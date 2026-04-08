@@ -81,11 +81,11 @@ async function verifyPayment(req, res) {
          `SELECT * FROM payments WHERE razor_order_id=? AND status=?`, [razorOrderId, "PENDING"]
       )
 
-      finalPayment=payment;
-
+      
       if (payment.length === 0) {
          return res.status(404).json({ message: "Payment not found" })
       }
+      finalPayment=payment[0];
 
       const [result] = await db.execute(
       `UPDATE payments 
@@ -127,10 +127,6 @@ async function verifyPayment(req, res) {
          })
 
       ])
-
-
-
-
 
       return res.status(200).json({
          message: "Payment verified successfully"

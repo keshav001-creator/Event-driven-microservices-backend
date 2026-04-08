@@ -7,15 +7,39 @@ async function createOrder(req, res) {
     const userId = req.user.id;
     const token = req.cookies?.token || req.headers?.authorization?.split(' ')[1]
     let orderId = null;
+    const idempotencyKey = req.headers["idempotency-key"] || null; // Get idempotency key from headers if provided
 
     try {
+
+        // idempotency key is required to avoid creating multiple orders when user clicks multiple times on place order button before getting response
+        if (!idempotencyKey) {
+            return res.status(400).json({ message: "Idempotency key is required" })
+        }
+
+
+        const [existingOrder] = await db.execute(
+            `SELECT * FROM orders WHERE idempotency_key = ?`,
+            [idempotencyKey]
+        );
+
+
+
+        // If an order with the same idempotency key already exists, return that order instead of creating a new one
+        if (existingOrder.length > 0) {
+            return res.status(200).json({
+                message: "Order already created",
+                order: existingOrder[0]
+            });
+        }
+
+
         const cartResponse = await axios.get(`http://localhost:3002/cart/item`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }
         })
-
         // console.log("Cart Response:", cartResponse.data.cart.items);
+
 
         const products = await Promise.all(cartResponse.data.cart.items.map(async (item) => {
             const response = await axios.get(`http://localhost:3001/products/${item.productId}`, {
@@ -73,15 +97,17 @@ async function createOrder(req, res) {
         }
 
 
+
         // add order into the database and get the orderId for adding items into order_items table
         const [orderResult] = await db.execute(
             `INSERT INTO orders
-            (user_id, total_price_amount, total_price_currency, shipping_address_id)
-            VALUES (?,?,?,?)`,
-            [userId, TotalPriceAmount, "INR", addressId]
+            (user_id, total_price_amount, total_price_currency, shipping_address_id, idempotency_key)
+            VALUES (?,?,?,?,?)`,
+            [userId, TotalPriceAmount, "INR", addressId, idempotencyKey]
         )
 
-        const orderId = orderResult.insertId;
+        orderId = orderResult.insertId;
+
 
 
         for (let item of orderItems) {
@@ -119,6 +145,19 @@ async function createOrder(req, res) {
         if (orderId) {
             await db.execute(`DELETE FROM order_items WHERE order_id = ?`, [orderId])
             await db.execute(`DELETE FROM orders WHERE order_id = ?`, [orderId])
+        }
+
+        // if error is due to duplicate entry of idempotency key, then return the existing order with that idempotency key
+        if (err.code === 'ER_DUP_ENTRY') {
+            const [existingOrder] = await db.execute(
+                `SELECT * FROM orders WHERE idempotency_key = ?`,
+                [idempotencyKey]
+            );
+            return res.status(400).json({
+                message: "Order with the same idempotency key already exists",
+                order: existingOrder[0]
+            });
+
         }
         console.log(err)
         res.status(500).json({ message: "Internal server error", err })
@@ -227,40 +266,5 @@ async function cancelMyOrderById(req, res) {
         })
     }
 }
-
-// async function updateOrderAddress(req,res){
-
-//     const userId = req.user.id;
-//     const orderId = req.params.id;
-
-//     try {
-
-//          const [orderStatus] = await db.execute(
-//             `SELECT status FROM orders WHERE user_id=? AND order_id=?`, [userId, orderId]
-//         )
-
-//         if(!orderStatus.status=="PENDING"){
-//             return res.status(200).json({message:"Order can not be cancelled"})
-//         }
-
-
-//         const [order] = await db.execute(
-//             `DELETE FROM orders WHERE user_id=? AND order_id=?`, [userId, orderId]
-//         )
-
-//         // console.log(order)
-
-//         return res.status(200).json({
-//             message: "Order cancelled successfully"
-//         })
-
-//     } catch (err) {
-//         return res.status(500).json({
-//             message: "Internal server error",
-//             error: err.message
-//         })
-//     }
-// }
-
 
 module.exports = { createOrder, getMyOrder, getMyOrderById, cancelMyOrderById }
