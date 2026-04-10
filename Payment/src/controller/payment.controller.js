@@ -2,6 +2,7 @@ require('dotenv').config();
 const Razorpay = require('razorpay');
 const db = require("../config/mySql")
 const axios = require("axios")
+const cron = require("node-cron")
 const { publishToQueue } = require('../broker/broker');
 
 const razorpay = new Razorpay({
@@ -68,29 +69,37 @@ async function verifyPayment(req, res) {
    try {
       const { validatePaymentVerification } = require('../../node_modules/razorpay/dist/utils/razorpay-utils.js')
 
+      const [payment] = await db.execute(
+         `SELECT * FROM payments WHERE razor_order_id=? AND status=?`, [razorOrderId, "PENDING"]
+      )
+      if (payment.length === 0) {
+         return res.status(404).json({ message: "Payment not found" })
+      }
+      finalPayment = payment[0];
+
       const isValid = validatePaymentVerification({
          order_id: razorOrderId,
          payment_id: razorpayPaymentId,
       }, signature, secret);
 
       if (!isValid) {
-         await publishToQueue("order_payment_queue", {
-            orderId: razorOrderId,
-            status: "FAILED",
-            userId: req.user.id
-         });
+         await Promise.all([
+            publishToQueue("order_payment_queue", {
+               orderId: razorOrderId,
+               status: "FAILED",
+               userId: req.user.id
+            }),
+            publishToQueue("payment_failed_queue", {   //payment notification queue
+               orderId: finalPayment?.order_id,
+               paymentId: finalPayment?.id,
+               amount: finalPayment?.price_amount,
+               currency: finalPayment?.price_currency,
+               email: req.user.email,
+               username: req.user.username
+            })
+         ])
          return res.status(400).json({ message: "Payment invalid" })
       }
-
-      const [payment] = await db.execute(
-         `SELECT * FROM payments WHERE razor_order_id=? AND status=?`, [razorOrderId, "PENDING"]
-      )
-
-
-      if (payment.length === 0) {
-         return res.status(404).json({ message: "Payment not found" })
-      }
-      finalPayment = payment[0];
 
       const [result] = await db.execute(
          `UPDATE payments 
@@ -140,18 +149,6 @@ async function verifyPayment(req, res) {
 
 
    } catch (err) {
-
-
-      publishToQueue("payment_failed_queue", {
-         orderId: finalPayment?.order_id,
-         paymentId: finalPayment?.id,  
-         amount: finalPayment?.price_amount,
-         currency: finalPayment?.price_currency,
-         email: req.user.email,
-         username: req.user.username
-      })
-
-
       return res.status(500).json({
          message: "Internal server error",
          err: err.message
