@@ -8,6 +8,12 @@ module.exports = function () {
         const status = data.status;
         const userId = data.userId;
         try {
+            if(status === "FAILED"){
+                await db.execute(   
+                    `UPDATE orders SET status=? WHERE order_id=? AND user_id=?`, [status, orderId, userId]
+                )
+                return;
+            }
             const [result] = await db.execute(
                 `UPDATE orders SET status=? WHERE order_id=? AND user_id=?`, [status, orderId, userId]
             )

@@ -20,7 +20,7 @@ async function createPayment(req, res) {
       const orderResponse = await axios.get(`http://localhost:3003/api/${orderId}`, {
          headers: {
             Authorization: `Bearer ${token}`
-         }  
+         }
       })
 
       //    console.log(orderResponse.data.order[0].total_price_amount)
@@ -74,6 +74,11 @@ async function verifyPayment(req, res) {
       }, signature, secret);
 
       if (!isValid) {
+         await publishToQueue("order_payment_queue", {
+            orderId: razorOrderId,
+            status: "FAILED",
+            userId: req.user.id
+         });
          return res.status(400).json({ message: "Payment invalid" })
       }
 
@@ -81,14 +86,14 @@ async function verifyPayment(req, res) {
          `SELECT * FROM payments WHERE razor_order_id=? AND status=?`, [razorOrderId, "PENDING"]
       )
 
-      
+
       if (payment.length === 0) {
          return res.status(404).json({ message: "Payment not found" })
       }
-      finalPayment=payment[0];
+      finalPayment = payment[0];
 
       const [result] = await db.execute(
-      `UPDATE payments 
+         `UPDATE payments 
       SET razorpay_payment_id=?, signature=?, status='COMPLETED'
       WHERE razor_order_id=? AND status='PENDING' `,
          [razorpayPaymentId, signature, razorOrderId]
@@ -102,7 +107,7 @@ async function verifyPayment(req, res) {
 
 
       await Promise.all([
-         publishToQueue("payment_completed_queue", {
+         publishToQueue("payment_completed_queue", {  //payment notification queue
             orderId: payment[0].order_id,
             paymentId: payment[0].id,
             amount: payment[0].price_amount,
@@ -119,7 +124,7 @@ async function verifyPayment(req, res) {
          }),
          publishToQueue("order_payment_queue", {
             orderId: payment[0].order_id,
-            status:"COMPLETED",
+            status: "COMPLETED",
             userId: payment[0].user_id
          }),
          publishToQueue("payment_cart_queue", {
@@ -136,14 +141,16 @@ async function verifyPayment(req, res) {
 
    } catch (err) {
 
-      await publishToQueue("payment_failed_queue", {
+
+      publishToQueue("payment_failed_queue", {
          orderId: finalPayment?.order_id,
-         paymentId: finalPayment?.id,
+         paymentId: finalPayment?.id,  
          amount: finalPayment?.price_amount,
          currency: finalPayment?.price_currency,
          email: req.user.email,
          username: req.user.username
       })
+
 
       return res.status(500).json({
          message: "Internal server error",

@@ -1,6 +1,6 @@
 const axios = require("axios")
 const db = require("../config/mysql")
-const { publishToQueue, subscribeToQueue } = require("../broker/broker")
+const { publishToQueue } = require("../broker/broker")
 
 async function createOrder(req, res) {
 
@@ -138,7 +138,6 @@ async function createOrder(req, res) {
 
         return res.status(201).json({
             message: "Order created successfully",
-
         })
 
     } catch (err) {
